@@ -3,7 +3,7 @@ import { supabaseAdmin } from '../lib/supabase';
 
 export async function nearbyRoutes(fastify: FastifyInstance) {
     // Get nearby users based on location and radius
-    fastify.get('/api/users/nearby', async (request, reply) => {
+    fastify.get('/users/nearby', async (request, reply) => {
         const authHeader = request.headers.authorization;
         if (!authHeader || !authHeader.startsWith('Bearer ')) {
             return reply.code(401).send({ error: 'Missing or invalid authorization header' });
