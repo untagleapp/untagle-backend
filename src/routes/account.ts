@@ -6,6 +6,39 @@ interface DeleteAccountBody {
 }
 
 export async function accountRoutes(fastify: FastifyInstance) {
+  // Get user profile
+  fastify.get('/account/profile', async (request, reply) => {
+    try {
+      const authHeader = request.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return reply.code(401).send({ error: 'Unauthorized' });
+      }
+
+      const token = authHeader.substring(7);
+      const verified = await verifyToken(token);
+      
+      if (!verified) {
+        return reply.code(401).send({ error: 'Invalid token' });
+      }
+
+      const { data: profile, error } = await supabaseAdmin
+        .from('users')
+        .select('*')
+        .eq('id', verified.userId)
+        .single();
+
+      if (error) {
+        fastify.log.error({ err: error }, 'Error fetching profile');
+        return reply.code(500).send({ error: 'Failed to fetch profile' });
+      }
+
+      return profile;
+    } catch (error) {
+      fastify.log.error({ err: error }, 'Get profile error');
+      return reply.code(500).send({ error: 'Internal server error' });
+    }
+  });
+
   // Delete user account
   fastify.post('/account/delete', async (request, reply) => {
     try {
