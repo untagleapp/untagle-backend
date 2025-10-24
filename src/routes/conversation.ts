@@ -51,6 +51,39 @@ export async function conversationRoutes(fastify: FastifyInstance) {
         }
       }
 
+      // Check if conversation already exists between these participants
+      if (allParticipants.length === 2) {
+        const { data: existingConvs } = await supabaseAdmin
+          .from('conversation_participants')
+          .select('conversation_id')
+          .in('user_id', allParticipants);
+
+        if (existingConvs && existingConvs.length > 0) {
+          // Group by conversation_id and count participants
+          const convCounts = new Map<string, number>();
+          existingConvs.forEach((cp: any) => {
+            convCounts.set(cp.conversation_id, (convCounts.get(cp.conversation_id) || 0) + 1);
+          });
+
+          // Find conversation where both users are participants
+          for (const [convId, count] of convCounts.entries()) {
+            if (count === 2) {
+              // Verify conversation is not terminated
+              const { data: conv } = await supabaseAdmin
+                .from('conversations')
+                .select('id, is_terminated')
+                .eq('id', convId)
+                .single();
+
+              if (conv && !conv.is_terminated) {
+                fastify.log.info({ conversationId: conv.id }, 'Found existing conversation');
+                return { conversationId: conv.id, conversation: conv };
+              }
+            }
+          }
+        }
+      }
+
       // Create conversation
       const { data: conversation, error: convError } = await supabaseAdmin
         .from('conversations')
@@ -82,7 +115,7 @@ export async function conversationRoutes(fastify: FastifyInstance) {
         return reply.code(500).send({ error: 'Failed to add participants' });
       }
 
-      return { conversationId: conversation.id };
+      return { conversationId: conversation.id, conversation };
     } catch (error) {
       fastify.log.error({ err: error }, 'Create conversation error');
       return reply.code(500).send({ error: 'Internal server error' });

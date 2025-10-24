@@ -64,7 +64,7 @@ export async function locationRoutes(fastify: FastifyInstance) {
         return reply.code(404).send({ error: 'User not found' });
       }
 
-      // Truncate coordinates to 4 decimal places for privacy
+      // Truncate coordinates to 5 decimal places for privacy (~1.1m precision)
       const processedLocations = locations.map(loc => ({
         user_id: userId,
         latitude: truncateCoordinate(loc.latitude),
