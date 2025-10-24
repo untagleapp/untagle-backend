@@ -36,15 +36,23 @@ export async function presenceRoutes(fastify: FastifyInstance) {
         updateData.presence_status = presenceStatus;
       }
 
+      fastify.log.info({ 
+        userId, 
+        presenceStatus,
+        last_active_at: updateData.last_active_at 
+      }, '💓 Heartbeat received');
+
       const { error } = await supabaseAdmin
         .from('users')
         .update(updateData)
         .eq('id', userId);
 
       if (error) {
-        fastify.log.error({ err: error }, 'Error updating presence');
+        fastify.log.error({ err: error }, '❌ Error updating presence');
         return reply.code(500).send({ error: 'Failed to update presence' });
       }
+
+      fastify.log.info({ userId }, '✅ Presence updated');
 
       return { success: true };
     } catch (error) {

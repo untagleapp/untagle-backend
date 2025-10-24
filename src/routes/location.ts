@@ -76,15 +76,23 @@ export async function locationRoutes(fastify: FastifyInstance) {
         created_at: new Date().toISOString()
       }));
 
+      fastify.log.info({ 
+        userId, 
+        count: processedLocations.length,
+        sample: processedLocations[0]
+      }, '📍 Saving location batch to DB');
+
       const { data, error } = await supabaseAdmin
         .from('locations')
         .insert(processedLocations)
         .select();
 
       if (error) {
-        fastify.log.error({ err: error }, 'Error inserting locations');
+        fastify.log.error({ err: error }, '❌ Error inserting locations');
         return reply.code(500).send({ error: 'Failed to save locations' });
       }
+
+      fastify.log.info({ inserted: data.length }, '✅ Locations saved successfully');
 
       return { 
         success: true, 

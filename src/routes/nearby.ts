@@ -34,6 +34,13 @@ export async function nearbyRoutes(fastify: FastifyInstance) {
             return reply.code(400).send({ error: 'Radius must be between 0 and 5 km' });
         }
 
+        fastify.log.info({
+            requestingUserId: user.id,
+            latitude,
+            longitude,
+            radiusKm
+        }, '🔍 Nearby users request');
+
         try {
             // Get blocked users (both directions)
             const { data: blocks } = await supabaseAdmin
@@ -52,8 +59,12 @@ export async function nearbyRoutes(fastify: FastifyInstance) {
                 });
             }
 
+            fastify.log.info({ blockedCount: blockedUserIds.size }, '🚫 Blocked users loaded');
+
             // Get users who are online (last_active_at within 2 minutes)
             const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+
+            fastify.log.info({ twoMinutesAgo }, '⏰ Querying online users since');
 
             const { data: onlineUsers, error: usersError } = await supabaseAdmin
                 .from('users')
@@ -63,16 +74,21 @@ export async function nearbyRoutes(fastify: FastifyInstance) {
                 .neq('id', user.id); // Exclude self
 
             if (usersError) {
-                fastify.log.error({ err: usersError }, 'Error fetching users');
+                fastify.log.error({ err: usersError }, '❌ Error fetching users');
                 return reply.code(500).send({ error: 'Failed to fetch users' });
             }
 
+            fastify.log.info({ onlineUsersCount: onlineUsers?.length || 0 }, '👥 Online users found');
+
             if (!onlineUsers || onlineUsers.length === 0) {
+                fastify.log.info('No online users found');
                 return reply.send({ users: [] });
             }
 
             // Filter out blocked users
             const availableUsers = onlineUsers.filter(u => !blockedUserIds.has(u.id));
+
+            fastify.log.info({ availableUsersCount: availableUsers.length }, '✅ Available users (after blocking filter)');
 
             if (availableUsers.length === 0) {
                 return reply.send({ users: [] });
@@ -82,6 +98,11 @@ export async function nearbyRoutes(fastify: FastifyInstance) {
             const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
             const userIds = availableUsers.map(u => u.id);
 
+            fastify.log.info({ 
+                fiveMinutesAgo,
+                userIds 
+            }, '📍 Querying locations for users');
+
             const { data: locations, error: locError } = await supabaseAdmin
                 .from('locations')
                 .select('user_id, latitude, longitude, recorded_at')
@@ -90,9 +111,14 @@ export async function nearbyRoutes(fastify: FastifyInstance) {
                 .order('recorded_at', { ascending: false });
 
             if (locError) {
-                fastify.log.error({ err: locError }, 'Error fetching locations');
+                fastify.log.error({ err: locError }, '❌ Error fetching locations');
                 return reply.code(500).send({ error: 'Failed to fetch locations' });
             }
+
+            fastify.log.info({ 
+                locationsCount: locations?.length || 0,
+                locations: locations?.slice(0, 5) // Log first 5 for debugging
+            }, '📍 Locations found');
 
             // Get most recent location per user
             const userLocations = new Map<string, { lat: number; lon: number }>();
@@ -106,6 +132,8 @@ export async function nearbyRoutes(fastify: FastifyInstance) {
                     }
                 });
             }
+
+            fastify.log.info({ usersWithLocations: userLocations.size }, '📍 Users with recent locations');
 
             // Calculate distance using Haversine formula
             const haversineDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
@@ -124,9 +152,20 @@ export async function nearbyRoutes(fastify: FastifyInstance) {
             const nearbyUsers = availableUsers
                 .map(u => {
                     const userLoc = userLocations.get(u.id);
-                    if (!userLoc) return null;
+                    if (!userLoc) {
+                        fastify.log.debug({ userId: u.id }, '⚠️ User has no recent location');
+                        return null;
+                    }
 
                     const distance = haversineDistance(latitude, longitude, userLoc.lat, userLoc.lon);
+
+                    fastify.log.debug({
+                        userId: u.id,
+                        userName: u.name,
+                        distance: distance.toFixed(3) + 'km',
+                        userLocation: userLoc,
+                        withinRadius: distance <= radiusKm
+                    }, '📏 Distance calculated');
 
                     if (distance <= radiusKm) {
                         return {
@@ -141,6 +180,11 @@ export async function nearbyRoutes(fastify: FastifyInstance) {
                 .filter(u => u !== null)
                 .sort((a, b) => a!.distance_km - b!.distance_km) // Sort by distance
                 .slice(0, 50); // Limit to 50 users
+
+            fastify.log.info({ 
+                nearbyUsersCount: nearbyUsers.length,
+                nearbyUsers: nearbyUsers.slice(0, 5) // Log first 5
+            }, '✅ Nearby users result');
 
             return reply.send({ users: nearbyUsers });
 
