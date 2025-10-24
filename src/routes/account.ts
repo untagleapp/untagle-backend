@@ -25,11 +25,15 @@ export async function accountRoutes(fastify: FastifyInstance) {
         .from('users')
         .select('*')
         .eq('id', verified.userId)
-        .single();
+        .maybeSingle();
 
       if (error) {
         fastify.log.error({ err: error }, 'Error fetching profile');
         return reply.code(500).send({ error: 'Failed to fetch profile' });
+      }
+
+      if (!profile) {
+        return reply.code(404).send({ error: 'Profile not found' });
       }
 
       return profile;

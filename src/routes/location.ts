@@ -48,6 +48,22 @@ export async function locationRoutes(fastify: FastifyInstance) {
         return reply.code(400).send({ error: 'Invalid locations data' });
       }
 
+      // Verify user exists in database
+      const { data: userExists, error: userError } = await supabaseAdmin
+        .from('users')
+        .select('id')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (userError) {
+        fastify.log.error({ err: userError }, 'Error checking user existence');
+        return reply.code(500).send({ error: 'Failed to verify user' });
+      }
+
+      if (!userExists) {
+        return reply.code(404).send({ error: 'User not found' });
+      }
+
       // Truncate coordinates to 4 decimal places for privacy
       const processedLocations = locations.map(loc => ({
         user_id: userId,

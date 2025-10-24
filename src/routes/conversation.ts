@@ -234,7 +234,7 @@ export async function conversationRoutes(fastify: FastifyInstance) {
         `)
         .eq('user_id', verified.userId)
         .eq('conversations.is_terminated', false)
-        .order('conversations.created_at', { ascending: false });
+        .order('created_at', { foreignTable: 'conversations', ascending: false });
 
       if (error) {
         fastify.log.error({ err: error }, 'Error fetching conversations');
