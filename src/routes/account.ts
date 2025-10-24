@@ -32,8 +32,39 @@ export async function accountRoutes(fastify: FastifyInstance) {
         return reply.code(500).send({ error: 'Failed to fetch profile' });
       }
 
+      // If profile doesn't exist, create it as a fallback
+      // This handles edge cases where the trigger didn't fire
       if (!profile) {
-        return reply.code(404).send({ error: 'Profile not found' });
+        fastify.log.warn({ userId: verified.userId }, 'Profile not found, attempting to create');
+        
+        // Get user info from auth
+        const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.getUserById(verified.userId);
+        
+        if (authError || !authUser) {
+          fastify.log.error({ err: authError }, 'Auth user not found');
+          return reply.code(404).send({ error: 'User not found' });
+        }
+
+        // Create the missing user record
+        const { data: newProfile, error: createError } = await supabaseAdmin
+          .from('users')
+          .insert({
+            id: authUser.user.id,
+            email: authUser.user.email!,
+            name: authUser.user.user_metadata?.name || authUser.user.email!.split('@')[0],
+            created_at: authUser.user.created_at,
+            updated_at: new Date().toISOString()
+          })
+          .select()
+          .single();
+
+        if (createError) {
+          fastify.log.error({ err: createError }, 'Error creating profile');
+          return reply.code(500).send({ error: 'Failed to create profile' });
+        }
+
+        fastify.log.info({ userId: verified.userId }, 'Profile created successfully');
+        return newProfile;
       }
 
       return profile;
@@ -137,7 +168,7 @@ export async function accountRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Update user profile (name, etc.)
+  // Update user profile (name, bio, age, location, gender - all optional)
   fastify.patch('/account/profile', async (request, reply) => {
     try {
       const authHeader = request.headers.authorization;
@@ -152,18 +183,62 @@ export async function accountRoutes(fastify: FastifyInstance) {
         return reply.code(401).send({ error: 'Invalid token' });
       }
 
-      const { name } = request.body as { name?: string };
+      const { name, bio, age, location, gender } = request.body as { 
+        name?: string;
+        bio?: string;
+        age?: number;
+        location?: string;
+        gender?: string;
+      };
 
-      if (!name || name.trim().length === 0) {
-        return reply.code(400).send({ error: 'Name is required' });
+      // Build update object dynamically (only update provided fields)
+      const updates: any = {
+        updated_at: new Date().toISOString()
+      };
+
+      // Validate and add name if provided
+      if (name !== undefined) {
+        if (name.trim().length === 0) {
+          return reply.code(400).send({ error: 'Name cannot be empty if provided' });
+        }
+        updates.name = name.trim();
+      }
+
+      // Validate and add bio if provided
+      if (bio !== undefined) {
+        if (bio.length > 500) {
+          return reply.code(400).send({ error: 'Bio must be 500 characters or less' });
+        }
+        updates.bio = bio.trim() || null;
+      }
+
+      // Validate and add age if provided
+      if (age !== undefined) {
+        if (age !== null && (age < 13 || age > 120)) {
+          return reply.code(400).send({ error: 'Age must be between 13 and 120' });
+        }
+        updates.age = age;
+      }
+
+      // Add location if provided
+      if (location !== undefined) {
+        updates.location = location.trim() || null;
+      }
+
+      // Validate and add gender if provided
+      if (gender !== undefined) {
+        const validGenders = ['masculine', 'feminine', 'non-binary', 'other'];
+        if (gender !== null && !validGenders.includes(gender)) {
+          return reply.code(400).send({ 
+            error: 'Gender must be one of: masculine, feminine, non-binary, other' 
+          });
+        }
+        updates.gender = gender;
       }
 
       const { error } = await supabaseAdmin
         .from('users')
-        .update({ 
-          name: name.trim(),
-          updated_at: new Date().toISOString()
-        })
+        .update(updates)
         .eq('id', verified.userId);
 
       if (error) {
