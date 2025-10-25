@@ -61,16 +61,16 @@ export async function nearbyRoutes(fastify: FastifyInstance) {
 
             fastify.log.info({ blockedCount: blockedUserIds.size }, '🚫 Blocked users loaded');
 
-            // Get users who are online (last_active_at within 2 minutes)
-            const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+            // Get users who are online (last_active_at within 5 minutes - increased from 2 minutes)
+            const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
 
-            fastify.log.info({ twoMinutesAgo }, '⏰ Querying online users since');
+            fastify.log.info({ fiveMinutesAgo }, '⏰ Querying online users since');
 
             const { data: onlineUsers, error: usersError } = await supabaseAdmin
                 .from('users')
                 .select('id, name, email, profile_image_url, presence_status')
                 .eq('presence_status', 'online')
-                .gte('last_active_at', twoMinutesAgo)
+                .gte('last_active_at', fiveMinutesAgo)
                 .neq('id', user.id); // Exclude self
 
             if (usersError) {
