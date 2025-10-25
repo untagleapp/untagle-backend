@@ -31,7 +31,9 @@ async function start() {
     // Register CORS
     await fastify.register(cors, {
       origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000'],
-      credentials: true
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
+      allowedHeaders: ['Content-Type', 'Authorization']
     });
 
     // Register rate limiting
