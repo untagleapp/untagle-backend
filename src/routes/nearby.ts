@@ -95,11 +95,11 @@ export async function nearbyRoutes(fastify: FastifyInstance) {
             }
 
             // Get recent locations for these users (within last 5 minutes)
-            const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+            const fiveMinutesAgoLocations = new Date(Date.now() - 5 * 60 * 1000).toISOString();
             const userIds = availableUsers.map(u => u.id);
 
             fastify.log.info({ 
-                fiveMinutesAgo,
+                fiveMinutesAgo: fiveMinutesAgoLocations,
                 userIds 
             }, '📍 Querying locations for users');
 
@@ -107,7 +107,7 @@ export async function nearbyRoutes(fastify: FastifyInstance) {
                 .from('locations')
                 .select('user_id, latitude, longitude, recorded_at')
                 .in('user_id', userIds)
-                .gte('recorded_at', fiveMinutesAgo)
+                .gte('recorded_at', fiveMinutesAgoLocations)
                 .order('recorded_at', { ascending: false });
 
             if (locError) {
