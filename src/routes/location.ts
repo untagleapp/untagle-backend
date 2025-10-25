@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { supabaseAdmin, verifyToken, truncateCoordinate } from '../lib/supabase';
+import { supabaseAdmin, verifyToken } from '../lib/supabase';
 
 interface LocationData {
   latitude: number;
@@ -64,11 +64,11 @@ export async function locationRoutes(fastify: FastifyInstance) {
         return reply.code(404).send({ error: 'User not found' });
       }
 
-      // Truncate coordinates to 5 decimal places for privacy (~1.1m precision)
+      // Use exact coordinates for maximum precision
       const processedLocations = locations.map(loc => ({
         user_id: userId,
-        latitude: truncateCoordinate(loc.latitude),
-        longitude: truncateCoordinate(loc.longitude),
+        latitude: loc.latitude,
+        longitude: loc.longitude,
         accuracy: loc.accuracy,
         speed: loc.speed,
         heading: loc.heading,

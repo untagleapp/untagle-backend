@@ -29,8 +29,3 @@ export async function verifyToken(token: string): Promise<{ userId: string } | n
     return null;
   }
 }
-
-// Helper to truncate coordinates to 5 decimal places (~1.1m precision)
-export function truncateCoordinate(coord: number): number {
-  return Math.trunc(coord * 100000) / 100000;
-}
