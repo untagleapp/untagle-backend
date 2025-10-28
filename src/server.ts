@@ -13,6 +13,7 @@ import { conversationRoutes } from './routes/conversation';
 import { blockRoutes } from './routes/block';
 import { accountRoutes } from './routes/account';
 import { nearbyRoutes } from './routes/nearby';
+import { cleanupRoutes } from './routes/cleanup';
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 const HOST = process.env.HOST || '0.0.0.0';
@@ -63,6 +64,7 @@ async function start() {
     await fastify.register(blockRoutes, { prefix: '/api' });
     await fastify.register(accountRoutes, { prefix: '/api' });
     await fastify.register(nearbyRoutes, { prefix: '/api' });
+    await fastify.register(cleanupRoutes, { prefix: '/api' });
 
     // Start server
     await fastify.listen({ port: PORT, host: HOST });
