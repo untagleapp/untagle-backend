@@ -6,6 +6,66 @@ interface CleanupRequestBody {
 }
 
 export async function cleanupRoutes(fastify: FastifyInstance) {
+  // Marcar usuários inativos como offline
+  fastify.post('/cleanup/inactive-users', async (request, reply) => {
+    try {
+      fastify.log.info('🧹 Starting inactive users cleanup');
+
+      // Get users who are marked online but haven't sent heartbeat in 60 seconds
+      const sixtySecondsAgo = new Date(Date.now() - 60 * 1000).toISOString();
+
+      const { data: inactiveUsers, error: fetchError } = await supabaseAdmin
+        .from('users')
+        .select('id, name, email, last_active_at, presence_status')
+        .eq('presence_status', 'online')
+        .lt('last_active_at', sixtySecondsAgo);
+
+      if (fetchError) {
+        fastify.log.error({ err: fetchError }, '❌ Error fetching inactive users');
+        return reply.code(500).send({ error: 'Failed to fetch inactive users' });
+      }
+
+      if (!inactiveUsers || inactiveUsers.length === 0) {
+        fastify.log.info('✅ No inactive users to clean up');
+        return reply.send({ 
+          success: true, 
+          updated: 0,
+          message: 'No inactive users found'
+        });
+      }
+
+      fastify.log.info({ 
+        count: inactiveUsers.length,
+        users: inactiveUsers.map(u => ({ name: u.name, lastActive: u.last_active_at }))
+      }, '⚠️ Found inactive users');
+
+      // Mark them as offline
+      const userIds = inactiveUsers.map(u => u.id);
+
+      const { error: updateError } = await supabaseAdmin
+        .from('users')
+        .update({ presence_status: 'offline' })
+        .in('id', userIds);
+
+      if (updateError) {
+        fastify.log.error({ err: updateError }, '❌ Error updating users');
+        return reply.code(500).send({ error: 'Failed to update users' });
+      }
+
+      fastify.log.info({ count: inactiveUsers.length }, '✅ Marked inactive users as offline');
+
+      return reply.send({ 
+        success: true, 
+        updated: inactiveUsers.length,
+        users: inactiveUsers.map(u => ({ name: u.name, email: u.email }))
+      });
+
+    } catch (error: any) {
+      fastify.log.error({ err: error }, 'Inactive users cleanup error');
+      return reply.code(500).send({ error: 'Internal server error' });
+    }
+  });
+
   // Protected endpoint to manually trigger message cleanup
   // This can be called by Railway Cron or manually for testing
   fastify.post('/cleanup/messages', async (request, reply) => {
