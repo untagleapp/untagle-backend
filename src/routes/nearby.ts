@@ -61,16 +61,16 @@ export async function nearbyRoutes(fastify: FastifyInstance) {
 
             fastify.log.info({ blockedCount: blockedUserIds.size }, '🚫 Blocked users loaded');
 
-            // Get users who are online (last_active_at within 5 minutes - increased from 2 minutes)
-            const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+            // Get users who are online (last_active_at within 30 seconds - heartbeat is every 10s)
+            const thirtySecondsAgo = new Date(Date.now() - 30 * 1000).toISOString();
 
-            fastify.log.info({ fiveMinutesAgo }, '⏰ Querying online users since');
+            fastify.log.info({ thirtySecondsAgo }, '⏰ Querying online users since (30s window)');
 
             const { data: onlineUsers, error: usersError } = await supabaseAdmin
                 .from('users')
                 .select('id, name, email, profile_image_url, presence_status')
                 .eq('presence_status', 'online')
-                .gte('last_active_at', fiveMinutesAgo)
+                .gte('last_active_at', thirtySecondsAgo)
                 .neq('id', user.id); // Exclude self
 
             if (usersError) {
@@ -94,20 +94,20 @@ export async function nearbyRoutes(fastify: FastifyInstance) {
                 return reply.send({ users: [] });
             }
 
-            // Get recent locations for these users (within last 5 minutes)
-            const fiveMinutesAgoLocations = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+            // Get recent locations for these users (within last 30 seconds to match heartbeat)
+            const thirtySecondsAgoLocations = new Date(Date.now() - 30 * 1000).toISOString();
             const userIds = availableUsers.map(u => u.id);
 
             fastify.log.info({ 
-                fiveMinutesAgo: fiveMinutesAgoLocations,
+                thirtySecondsAgo: thirtySecondsAgoLocations,
                 userIds 
-            }, '📍 Querying locations for users');
+            }, '📍 Querying locations for users (30s window)');
 
             const { data: locations, error: locError } = await supabaseAdmin
                 .from('locations')
                 .select('user_id, latitude, longitude, recorded_at')
                 .in('user_id', userIds)
-                .gte('recorded_at', fiveMinutesAgoLocations)
+                .gte('recorded_at', thirtySecondsAgoLocations)
                 .order('recorded_at', { ascending: false });
 
             if (locError) {
